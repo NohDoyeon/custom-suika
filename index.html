@@ -27,7 +27,7 @@ html, body {
   color: var(--text);
   font-family: 'Noto Sans KR', sans-serif;
   overflow: hidden;
-  touch-action: none;
+  touch-action: auto;
 }
 
 /* ============================
@@ -101,6 +101,7 @@ html, body {
   height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 12px;
   flex-direction: column;
   gap: 10px;
@@ -114,6 +115,7 @@ html, body {
   justify-content: center;
   background: #120826;
   overflow: hidden;
+  touch-action: none;
 }
 
 /* 게임 래퍼 */
@@ -169,10 +171,13 @@ html, body {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 14px;
   z-index: 20;
-  padding: 24px;
+  padding: 30px 24px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .overlay.show { display: flex; }
 .overlay h2 { font-family: 'Jua', cursive; font-size: 1.9rem; color: var(--accent); text-align: center; }
@@ -186,21 +191,26 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 14px;
   z-index: 20;
-  padding: 28px 20px;
+  padding: 20px 20px 30px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 #startOverlay h2 {
   font-family: 'Jua', cursive;
-  font-size: 2.2rem;
+  font-size: 1.9rem;
   background: linear-gradient(135deg, var(--accent), var(--gold));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   text-align: center;
+  margin-top: 10px;
+  flex-shrink: 0;
 }
-#startOverlay p { color: #9980c0; font-size: 0.87rem; text-align: center; line-height: 1.75; }
+#startOverlay p { color: #9980c0; font-size: 0.87rem; text-align: center; line-height: 1.75; flex-shrink: 0; }
 
 /* 입력 */
 .input-group { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 260px; }
@@ -820,8 +830,8 @@ gc.addEventListener('touchmove',  e=>{ e.preventDefault(); if(tActive) mouseX=ge
 gc.addEventListener('touchend',   e=>{ e.preventDefault(); if(running&&tActive){ tActive=false; drop(mouseX); } }, {passive:false});
 gc.addEventListener('touchcancel',()=>{ tActive=false; }, {passive:true});
 
-// 화면 스크롤 방지 (게임 탭)
-document.getElementById('tab-game').addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
+// 화면 스크롤 방지 (게임 캔버스만)
+gc.addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
 
 // ===============================
 // 리사이즈
