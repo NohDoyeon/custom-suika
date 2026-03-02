@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a0a2e">
+<title>🍉 커스텀 수박게임</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #1a0a2e;
+  --panel: #2d1b4e;
+  --accent: #ff6b9d;
+  --accent2: #c77dff;
+  --gold: #ffd60a;
+  --text: #f0e6ff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ============================
+   앱 전체 레이아웃
+============================ */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* 상단 바 */
+#topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid #3a2060aa;
+  flex-shrink: 0;
+  gap: 8px;
+}
+#topBar h1 {
+  font-family: 'Jua', cursive;
+  font-size: 1.15rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent2), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+}
+.chips { display: flex; gap: 6px; }
+.chip {
+  background: #1a0a2e;
+  border: 1px solid #4a2d7a;
+  border-radius: 8px;
+  padding: 3px 8px;
+  text-align: center;
+  min-width: 54px;
+}
+.chip-lbl { font-size: 0.52rem; color: #9980c0; line-height: 1; }
+.chip-val { font-family: 'Jua', cursive; font-size: 0.95rem; color: var(--gold); line-height: 1.2; }
+
+/* 탭바 (모바일) */
+#tabBar {
+  display: flex;
+  background: var(--panel);
+  border-bottom: 1px solid #3a2060aa;
+  flex-shrink: 0;
+}
+.tab-btn {
+  flex: 1;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: #6a4a9a;
+  font-family: 'Jua', cursive;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.tab-btn.active { color: var(--accent2); border-bottom-color: var(--accent2); }
+
+/* 탭 콘텐츠 */
+#tabContent { flex: 1; overflow: hidden; position: relative; }
+.tab-panel {
+  display: none;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
+  flex-direction: column;
+  gap: 10px;
+}
+.tab-panel.active { display: flex; }
+
+/* 게임 탭 */
+#tab-game {
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  background: #120826;
+  overflow: hidden;
+}
+
+/* 게임 래퍼 */
+#gameWrapper { position: relative; flex-shrink: 0; }
+#gameCanvas { display: block; touch-action: none; cursor: crosshair; }
+
+/* 다음 공 */
+#nextPreview {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: #2d1b4ecc;
+  border: 1px solid #4a2d7a;
+  border-radius: 10px;
+  padding: 5px 8px;
+  text-align: center;
+  font-size: 0.62rem;
+  color: #9980c0;
+  backdrop-filter: blur(4px);
+  z-index: 3;
+}
+#nextCanvas { display: block; margin: 3px auto 0; }
+
+/* 위험선 */
+#dangerLine {
+  position: absolute;
+  left: 0; right: 0;
+  pointer-events: none;
+  border-top: 1px dashed #ff6b9d55;
+  z-index: 2;
+}
+
+/* 힌트 */
+#hintBar {
+  position: absolute;
+  bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  background: #1a0a2eaa;
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.65rem;
+  color: #6a4a9a;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+/* 오버레이 공통 */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: #1a0a2ecc;
+  backdrop-filter: blur(8px);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 20;
+  padding: 24px;
+}
+.overlay.show { display: flex; }
+.overlay h2 { font-family: 'Jua', cursive; font-size: 1.9rem; color: var(--accent); text-align: center; }
+.final-score { font-family: 'Jua', cursive; font-size: 1.4rem; color: var(--gold); }
+
+/* 시작 화면 */
+#startOverlay {
+  position: absolute;
+  inset: 0;
+  background: #120826ee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  z-index: 20;
+  padding: 28px 20px;
+}
+#startOverlay h2 {
+  font-family: 'Jua', cursive;
+  font-size: 2.2rem;
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+}
+#startOverlay p { color: #9980c0; font-size: 0.87rem; text-align: center; line-height: 1.75; }
+
+/* 입력 */
+.input-group { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 260px; }
+.input-group label { font-size: 0.82rem; color: #b39ddb; }
+.input-group input {
+  background: #1a0a2e;
+  border: 1px solid #4a2d7a;
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 1rem;
+  outline: none;
+  width: 100%;
+}
+.input-group input:focus { border-color: var(--accent); }
+
+/* 버튼 */
+.btn {
+  padding: 11px 22px;
+  border: none;
+  border-radius: 12px;
+  font-family: 'Jua', cursive;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.1s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.btn:active { transform: scale(0.93); }
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: white;
+  box-shadow: 0 4px 16px #ff6b9d44;
+}
+.btn-secondary { background: transparent; color: var(--accent2); border: 1px solid var(--accent2); }
+.btn-row { display: flex; gap: 10px; width: 100%; max-width: 280px; }
+.btn-row .btn { flex: 1; }
+
+/* 패널 카드 */
+.pcard {
+  background: var(--panel);
+  border: 1px solid #4a2d7a;
+  border-radius: 14px;
+  padding: 14px;
+}
+.ptitle { font-family: 'Jua', cursive; font-size: 1rem; color: var(--accent2); margin-bottom: 8px; }
+.pdesc { font-size: 0.74rem; color: #9980c0; margin-bottom: 10px; }
+
+/* 이미지 슬롯 */
+.img-slots { display: flex; flex-direction: column; gap: 7px; }
+.img-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1a0a2e;
+  border: 1px dashed #4a2d7a;
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+  min-height: 52px;
+}
+.img-slot:active { border-color: var(--accent); background: #2d1b4e; }
+.img-slot input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.slot-prev {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: #3d2060;
+  border: 2px solid #5a3a8a;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+}
+.slot-prev img { width: 100%; height: 100%; object-fit: cover; }
+.slot-info { flex: 1; min-width: 0; }
+.slot-lv { font-family: 'Jua', cursive; font-size: 0.72rem; color: var(--gold); }
+.slot-nm { font-size: 0.7rem; color: #9980c0; }
+.slot-mt { font-size: 0.62rem; color: #5a3a8a; }
+.slot-action { font-size: 0.65rem; color: #6a4a9a; flex-shrink: 0; }
+
+/* 리더보드 */
+.lb-list { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.lb-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1a0a2e;
+  border: 1px solid #3a2060;
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.lb-item.me { border-color: var(--gold); }
+.lb-rank { font-family: 'Jua', cursive; font-size: 1rem; width: 26px; text-align: center; color: #6a4a9a; }
+.lb-rank.g { color: var(--gold); }
+.lb-rank.s { color: #b0b0c0; }
+.lb-rank.b { color: #cd7c32; }
+.lb-name { flex: 1; font-size: 0.85rem; }
+.lb-score { font-family: 'Jua', cursive; font-size: 1rem; color: var(--gold); }
+.lb-date { font-size: 0.62rem; color: #5a3a8a; }
+.lb-empty { text-align: center; color: #5a3a8a; font-size: 0.85rem; padding: 28px 10px; }
+
+/* 합체 가이드 */
+.guide-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.guide-row { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; }
+
+/* 이펙트 */
+.mfx {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  animation: mfxA 0.38s ease-out forwards; z-index: 5;
+}
+@keyframes mfxA {
+  0% { transform: scale(0.3); opacity: 0.9; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+/* 데스크탑 3열 */
+@media (min-width: 820px) {
+  html, body { overflow: auto; touch-action: auto; }
+  #app { max-width: 1100px; height: auto; min-height: 100vh; }
+  #topBar { padding: 14px 24px; }
+  #topBar h1 { font-size: 1.6rem; }
+  .chip { min-width: 68px; padding: 5px 10px; }
+  .chip-lbl { font-size: 0.65rem; }
+  .chip-val { font-size: 1.1rem; }
+  #tabBar { display: none; }
+  #tabContent { overflow: visible; height: auto; }
+  .tab-panel { display: flex !important; height: auto; overflow: visible; padding: 0; }
+  #desktopLayout {
+    display: grid;
+    grid-template-columns: 290px 1fr 290px;
+    gap: 16px;
+    padding: 16px;
+    align-items: start;
+  }
+  #tab-game { background: transparent; justify-content: flex-start; padding: 0; }
+  #hintBar { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 상단 바 -->
+  <div id="topBar">
+    <h1>🍉 커스텀 수박게임</h1>
+    <div class="chips">
+      <div class="chip"><div class="chip-lbl">점수</div><div class="chip-val" id="scoreDisp">0</div></div>
+      <div class="chip"><div class="chip-lbl">최고</div><div class="chip-val" id="bestDisp">0</div></div>
+      <div class="chip"><div class="chip-lbl">레벨</div><div class="chip-val" id="lvlDisp">1</div></div>
+    </div>
+  </div>
+
+  <!-- 탭바 (모바일) -->
+  <div id="tabBar">
+    <button class="tab-btn active"   onclick="tab('game')">🎮 게임</button>
+    <button class="tab-btn"          onclick="tab('images')">🖼️ 이미지</button>
+    <button class="tab-btn"          onclick="tab('rank')">🏆 순위</button>
+  </div>
+
+  <!-- 콘텐츠 -->
+  <div id="tabContent">
+    <div id="desktopLayout">
+
+      <!-- ① 이미지 설정 -->
+      <div id="tab-images" class="tab-panel">
+        <div class="pcard">
+          <div class="ptitle">🖼️ 커스텀 이미지</div>
+          <div class="pdesc">각 레벨 공에 이미지를 눌러서 업로드하세요!</div>
+          <div class="img-slots" id="imgSlots"></div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-secondary" style="flex:1;font-size:0.85rem;" onclick="resetImgs()">🔄 초기화</button>
+            <button class="btn btn-primary" style="flex:1;font-size:0.85rem;" onclick="applyImgs()">✅ 적용하기</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② 게임 -->
+      <div id="tab-game" class="tab-panel active">
+        <div id="gameWrapper">
+          <div id="nextPreview">다음<br><canvas id="nextC" width="48" height="48"></canvas></div>
+          <canvas id="gameC"></canvas>
+          <div id="dangerLine"></div>
+          <div id="hintBar">👆 드래그로 위치 잡고 손 떼면 공이 떨어져요!</div>
+
+          <!-- 시작 화면 -->
+          <div id="startOv">
+            <h2>🍉 수박게임</h2>
+            <p>손가락으로 위치를 잡고<br>떼면 공이 떨어져요!<br><br>같은 공끼리 합치면 더 큰 공 🎉<br>공이 위로 넘치면 게임 오버!</p>
+            <div class="input-group">
+              <label>닉네임</label>
+              <input type="text" id="nameStart" placeholder="이름을 입력하세요..." maxlength="12" autocomplete="off">
+            </div>
+            <button class="btn btn-primary" style="width:100%;max-width:260px;" onclick="startGame()">🚀 게임 시작!</button>
+          </div>
+
+          <!-- 게임 오버 -->
+          <div class="overlay" id="gameOverOv">
+            <h2>💥 게임 오버!</h2>
+            <div class="final-score" id="finalScoreDisp"></div>
+            <div class="input-group">
+              <label>🏆 기록에 남길 이름</label>
+              <input type="text" id="nameOver" placeholder="닉네임..." maxlength="12" autocomplete="off">
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-secondary" onclick="skipSave()">건너뛰기</button>
+              <button class="btn btn-primary" onclick="saveScore()">저장 🏆</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ 순위 & 가이드 -->
+      <div id="tab-rank" class="tab-panel">
+        <div class="pcard">
+          <div class="ptitle">🏆 명예의 전당</div>
+          <div class="lb-list" id="lbList"><div class="lb-empty">기록이 없어요!<br>첫 주인공이 되세요 🌟</div></div>
+          <button class="btn btn-secondary" style="width:100%;margin-top:12px;font-size:0.82rem;" onclick="clearLb()">🗑️ 기록 초기화</button>
+        </div>
+        <div class="pcard">
+          <div class="ptitle">📊 합체 가이드</div>
+          <div class="guide-list" id="guideList"></div>
+        </div>
+      </div>
+
+    </div><!-- /desktopLayout -->
+  </div><!-- /tabContent -->
+</div><!-- /app -->
+
+<script>
+// ===============================
+// 레벨 데이터
+// ===============================
+const LVL = [
+  { r:18,  sc:1,  emoji:'🫐', nm:'블루베리' },
+  { r:26,  sc:3,  emoji:'🍇', nm:'포도' },
+  { r:36,  sc:6,  emoji:'🍋', nm:'레몬' },
+  { r:46,  sc:10, emoji:'🍊', nm:'귤' },
+  { r:56,  sc:15, emoji:'🍎', nm:'사과' },
+  { r:68,  sc:21, emoji:'🍐', nm:'배' },
+  { r:80,  sc:28, emoji:'🥝', nm:'키위' },
+  { r:92,  sc:36, emoji:'🍑', nm:'복숭아' },
+  { r:106, sc:45, emoji:'🍍', nm:'파인애플' },
+  { r:122, sc:55, emoji:'🍈', nm:'멜론' },
+  { r:140, sc:66, emoji:'🍉', nm:'수박' },
+];
+
+let custImgs = new Array(11).fill(null);
+let actImgs  = [...custImgs];
+let imgCache = {};
+
+// ===============================
+// 탭 전환
+// ===============================
+function tab(name) {
+  const names = ['game','images','rank'];
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name==='game') resizeCv();
+}
+
+// ===============================
+// 캔버스 크기 (화면 꽉 채우기)
+// ===============================
+const CW0=400, CH0=550;
+let CW=CW0, CH=CH0, SCALE=1;
+const DROP_Y=80, DANGER_Y=80;
+
+const gc = document.getElementById('gameC');
+const gx = gc.getContext('2d');
+const nc = document.getElementById('nextC');
+const nx = nc.getContext('2d');
+
+function resizeCv() {
+  const panel = document.getElementById('tab-game');
+  const isDesktop = window.innerWidth >= 820;
+  let aw = panel.clientWidth  || window.innerWidth;
+  let ah = panel.clientHeight || (window.innerHeight - 96);
+  if (isDesktop) { aw = Math.min(aw, 420); ah = 600; }
+
+  const asp = CW0/CH0;
+  let cw, ch;
+  if (aw/ah > asp) { ch=ah; cw=ch*asp; } else { cw=aw; ch=cw/asp; }
+
+  SCALE = cw/CW0;
+  gc.width=CW0; gc.height=CH0;
+  gc.style.width=cw+'px'; gc.style.height=ch+'px';
+
+  const wr = document.getElementById('gameWrapper');
+  wr.style.width=cw+'px'; wr.style.height=ch+'px';
+
+  document.getElementById('dangerLine').style.top = (DANGER_Y*SCALE)+'px';
+}
+
+// ===============================
+// 이미지 슬롯 UI
+// ===============================
+function buildSlots() {
+  const c = document.getElementById('imgSlots');
+  c.innerHTML='';
+  LVL.forEach((l,i)=>{
+    const d=document.createElement('div'); d.className='img-slot';
+    d.innerHTML=`
+      <div class="slot-prev" id="sprev${i}">${custImgs[i]?`<img src="${custImgs[i]}">`:l.emoji}</div>
+      <div class="slot-info">
+        <div class="slot-lv">레벨 ${i+1}</div>
+        <div class="slot-nm">${l.nm}</div>
+        <div class="slot-mt">크기 ${l.r*2}px · +${l.sc}점</div>
+      </div>
+      <div class="slot-action" id="sact${i}">${custImgs[i]?'✅변경':'📷업로드'}</div>
+      <input type="file" accept="image/*" onchange="onImg(event,${i})">`;
+    c.appendChild(d);
+  });
+}
+
+function onImg(e, idx) {
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    custImgs[idx]=ev.target.result;
+    document.getElementById(`sprev${idx}`).innerHTML=`<img src="${ev.target.result}">`;
+    document.getElementById(`sact${idx}`).textContent='✅변경';
+  };
+  r.readAsDataURL(f);
+}
+
+function resetImgs() { custImgs=new Array(11).fill(null); buildSlots(); }
+
+function applyImgs() {
+  actImgs=[...custImgs]; imgCache={};
+  LVL.forEach((_,i)=>{ if(actImgs[i]) preloadImg(i); });
+  buildGuide();
+  if(window.innerWidth<820) tab('game');
+  else toast('✅ 적용 완료! 다음 게임부터 반영돼요.');
+}
+
+function toast(msg) {
+  const t=document.createElement('div');
+  t.style.cssText=`position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+    background:#2d1b4e;border:1px solid #4a2d7a;color:var(--text);
+    padding:10px 20px;border-radius:12px;font-size:0.85rem;z-index:999;
+    box-shadow:0 4px 20px #000a;`;
+  t.textContent=msg; document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
+}
+
+// ===============================
+// 합체 가이드
+// ===============================
+function buildGuide() {
+  const g=document.getElementById('guideList'); g.innerHTML='';
+  LVL.forEach((l,i)=>{
+    const row=document.createElement('div'); row.className='guide-row';
+    const c1=mkGC(i), c2=mkGC(i);
+    if(i<LVL.length-1){
+      const c3=mkGC(i+1);
+      appendAll(row, [sp(`Lv${i+1}`,'#9980c0'), c1, sp('+','#4a2d7a'), c2, sp('→','var(--accent)'), c3, sp(`+${l.sc}점`,'var(--gold)')]);
+    } else {
+      appendAll(row, [sp(`Lv${i+1}`,'#9980c0'), c1, sp('🎉 최종!','var(--gold)')]);
+    }
+    g.appendChild(row);
+  });
+}
+function appendAll(p, kids) { kids.forEach(k=>p.appendChild(k)); }
+function sp(t,c){ const s=document.createElement('span'); s.textContent=t; s.style.color=c; return s; }
+function mkGC(lv){
+  const c=document.createElement('canvas'); c.width=24; c.height=24;
+  const ctx=c.getContext('2d');
+  if(actImgs[lv]){
+    const img=new Image(); img.onload=()=>{ ctx.save(); ctx.beginPath(); ctx.arc(12,12,11,0,Math.PI*2); ctx.clip(); ctx.drawImage(img,1,1,22,22); ctx.restore(); }; img.src=actImgs[lv];
+  } else {
+    ctx.font='16px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(LVL[lv].emoji,12,13);
+  }
+  return c;
+}
+
+// ===============================
+// Matter.js 물리
+// ===============================
+const {Engine,World,Bodies,Body,Events} = Matter;
+let engine, world;
+let balls=[], mergeQ=[];
+let score=0, bestScore=parseInt(localStorage.getItem('suika_best')||'0');
+let running=false, cooldown=false;
+let curLv=0, nxtLv=0;
+let mouseX=200;
+
+function preloadImg(lv){
+  if(!actImgs[lv]||imgCache[lv]) return;
+  const img=new Image(); img.src=actImgs[lv]; imgCache[lv]=img;
+}
+
+function initPhysics(){
+  if(engine){ Engine.clear(engine); World.clear(world); }
+  engine=Engine.create({gravity:{y:2.2}});
+  world=engine.world;
+  const W={isStatic:true,friction:0.3,restitution:0.2};
+  World.add(world,[
+    Bodies.rectangle(CW0/2, CH0+15, CW0+60, 30, W),
+    Bodies.rectangle(-15,   CH0/2,  30, CH0*2, W),
+    Bodies.rectangle(CW0+15,CH0/2,  30, CH0*2, W),
+  ]);
+  Events.on(engine,'collisionStart',ev=>{
+    for(const p of ev.pairs){
+      const a=balls.find(b=>b.body===p.bodyA), b=balls.find(b=>b.body===p.bodyB);
+      if(!a||!b||a.lv!==b.lv||a.lv>=LVL.length-1||a.mg||b.mg) continue;
+      a.mg=b.mg=true;
+      mergeQ.push({a,b,x:(p.bodyA.position.x+p.bodyB.position.x)/2,y:(p.bodyA.position.y+p.bodyB.position.y)/2,nl:a.lv+1});
+    }
+  });
+}
+
+function addBall(x,y,lv){
+  const r=LVL[lv].r;
+  const body=Bodies.circle(x,y,r,{restitution:0.3,friction:0.5,frictionAir:0.012,density:0.002});
+  World.add(world,body);
+  const ball={body,lv};
+  balls.push(ball);
+  if(actImgs[lv]) preloadImg(lv);
+  return ball;
+}
+
+function rmBall(ball){ World.remove(world,ball.body); balls=balls.filter(b=>b!==ball); }
+
+function processMerge(){
+  while(mergeQ.length){
+    const {a,b,x,y,nl}=mergeQ.shift();
+    rmBall(a); rmBall(b);
+    addBall(x,y,nl);
+    score+=LVL[nl-1].sc;
+    updScore();
+    spawnFx(x,y,nl);
+  }
+}
+
+function spawnFx(x,y,lv){
+  const el=document.createElement('div'); el.className='mfx';
+  const r=LVL[lv].r;
+  const sx=x*SCALE, sy=y*SCALE;
+  const cols=['#ff6b9d','#c77dff','#ffd60a','#06d6a0'];
+  el.style.cssText=`width:${r*2*SCALE}px;height:${r*2*SCALE}px;left:${sx-r*SCALE}px;top:${sy-r*SCALE}px;
+    background:radial-gradient(circle,${cols[lv%4]}99,transparent);border:2px solid ${cols[lv%4]};`;
+  document.getElementById('gameWrapper').appendChild(el);
+  setTimeout(()=>el.remove(),380);
+}
+
+// ===============================
+// 게임 루프
+// ===============================
+let lastT=0;
+function loop(ts){
+  if(!running) return;
+  Engine.update(engine, Math.min(ts-lastT,33));
+  lastT=ts;
+  processMerge();
+  checkOver();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function clampX(x,lv){ const r=LVL[lv].r; return Math.max(r+2,Math.min(CW0-r-2,x)); }
+
+function draw(){
+  gx.clearRect(0,0,CW0,CH0);
+  gx.fillStyle='#120826'; gx.fillRect(0,0,CW0,CH0);
+
+  // 위험선
+  gx.setLineDash([5,5]); gx.strokeStyle='#ff6b9d44'; gx.lineWidth=1;
+  gx.beginPath(); gx.moveTo(0,DANGER_Y); gx.lineTo(CW0,DANGER_Y); gx.stroke();
+  gx.setLineDash([]);
+
+  // 드롭 가이드
+  if(!cooldown){
+    const cx=clampX(mouseX,curLv);
+    gx.strokeStyle='#ffffff18'; gx.lineWidth=1; gx.setLineDash([4,8]);
+    gx.beginPath(); gx.moveTo(cx,DROP_Y); gx.lineTo(cx,CH0); gx.stroke();
+    gx.setLineDash([]);
+    drawBall(gx, curLv, cx, DROP_Y, LVL[curLv].r*0.72, 0.55);
+  }
+
+  // 공
+  for(const ball of balls){
+    const {x,y}=ball.body.position;
+    gx.save(); gx.translate(x,y); gx.rotate(ball.body.angle);
+    drawBall(gx, ball.lv, 0, 0, LVL[ball.lv].r, 1);
+    gx.restore();
+  }
+}
+
+function drawBall(ctx,lv,x,y,r,a){
+  ctx.save(); ctx.globalAlpha=a;
+  if(actImgs[lv]&&imgCache[lv]&&imgCache[lv].complete&&imgCache[lv].naturalWidth>0){
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.clip();
+    ctx.drawImage(imgCache[lv],x-r,y-r,r*2,r*2);
+  } else {
+    ctx.font=`${r*1.65}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(LVL[lv].emoji,x,y);
+  }
+  ctx.restore();
+}
+
+function drawNext(){
+  nx.clearRect(0,0,48,48); nx.fillStyle='#1a0a2e'; nx.fillRect(0,0,48,48);
+  drawBall(nx, nxtLv, 24, 24, 17, 1);
+}
+
+function checkOver(){
+  for(const ball of balls){
+    if(ball.body.position.y - LVL[ball.lv].r < DANGER_Y && ball.body.speed < 0.6){
+      if(!ball.dt) ball.dt=Date.now();
+      else if(Date.now()-ball.dt > 2800){ gameOver(); return; }
+    } else ball.dt=null;
+  }
+}
+
+function gameOver(){
+  if(!running) return;
+  running=false;
+  document.getElementById('finalScoreDisp').textContent=`🎯 ${score.toLocaleString()}점`;
+  document.getElementById('nameOver').value=localStorage.getItem('suika_player')||'';
+  document.getElementById('gameOverOv').classList.add('show');
+}
+
+// ===============================
+// 떨어뜨리기
+// ===============================
+function drop(x){
+  if(!running||cooldown) return;
+  cooldown=true;
+  addBall(clampX(x,curLv), DROP_Y, curLv);
+  curLv=nxtLv;
+  nxtLv=Math.floor(Math.random()*Math.min(5,LVL.length));
+  document.getElementById('lvlDisp').textContent=curLv+1;
+  drawNext();
+  setTimeout(()=>cooldown=false, 480);
+}
+
+function updScore(){
+  document.getElementById('scoreDisp').textContent=score.toLocaleString();
+  if(score>bestScore){ bestScore=score; localStorage.setItem('suika_best',bestScore); document.getElementById('bestDisp').textContent=bestScore.toLocaleString(); }
+}
+
+// ===============================
+// 시작/재시작
+// ===============================
+function startGame(){
+  const nm=document.getElementById('nameStart').value.trim();
+  if(nm) localStorage.setItem('suika_player',nm);
+  document.getElementById('startOv').style.display='none';
+  _start();
+}
+
+function _start(){
+  balls=[]; mergeQ=[]; score=0; imgCache={};
+  actImgs=[...custImgs];
+  LVL.forEach((_,i)=>{ if(actImgs[i]) preloadImg(i); });
+  updScore(); initPhysics();
+  curLv=Math.floor(Math.random()*5);
+  nxtLv=Math.floor(Math.random()*5);
+  document.getElementById('lvlDisp').textContent=curLv+1;
+  drawNext();
+  running=true; lastT=performance.now();
+  requestAnimationFrame(loop);
+}
+
+function skipSave(){ document.getElementById('gameOverOv').classList.remove('show'); _start(); }
+
+function saveScore(){
+  const nm=document.getElementById('nameOver').value.trim()||'익명';
+  localStorage.setItem('suika_player',nm);
+  const ss=JSON.parse(localStorage.getItem('suika_scores')||'[]');
+  ss.push({name:nm,score,date:new Date().toLocaleDateString('ko-KR')});
+  ss.sort((a,b)=>b.score-a.score);
+  localStorage.setItem('suika_scores',JSON.stringify(ss.slice(0,20)));
+  renderLb();
+  document.getElementById('gameOverOv').classList.remove('show');
+  _start();
+}
+
+function clearLb(){
+  if(!confirm('기록을 모두 삭제할까요?')) return;
+  localStorage.removeItem('suika_scores'); renderLb();
+}
+
+function renderLb(){
+  const ss=JSON.parse(localStorage.getItem('suika_scores')||'[]');
+  const lb=document.getElementById('lbList');
+  if(!ss.length){ lb.innerHTML='<div class="lb-empty">기록이 없어요!<br>첫 주인공이 되세요 🌟</div>'; return; }
+  const me=localStorage.getItem('suika_player');
+  lb.innerHTML=ss.map((s,i)=>`
+    <div class="lb-item ${s.name===me?'me':''}">
+      <div class="lb-rank ${i===0?'g':i===1?'s':i===2?'b':''}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+      <div class="lb-name">${esc(s.name)}</div>
+      <div><div class="lb-score">${s.score.toLocaleString()}</div><div class="lb-date">${s.date}</div></div>
+    </div>`).join('');
+}
+
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ===============================
+// 입력 이벤트
+// ===============================
+function getX(clientX){ return (clientX - gc.getBoundingClientRect().left) / SCALE; }
+
+gc.addEventListener('mousemove', e=>{ mouseX=getX(e.clientX); });
+gc.addEventListener('click', e=>{ if(running) drop(getX(e.clientX)); });
+
+let tActive=false;
+gc.addEventListener('touchstart', e=>{ e.preventDefault(); tActive=true; mouseX=getX(e.touches[0].clientX); }, {passive:false});
+gc.addEventListener('touchmove',  e=>{ e.preventDefault(); if(tActive) mouseX=getX(e.touches[0].clientX); }, {passive:false});
+gc.addEventListener('touchend',   e=>{ e.preventDefault(); if(running&&tActive){ tActive=false; drop(mouseX); } }, {passive:false});
+gc.addEventListener('touchcancel',()=>{ tActive=false; }, {passive:true});
+
+// 화면 스크롤 방지 (게임 탭)
+document.getElementById('tab-game').addEventListener('touchmove', e=>e.preventDefault(), {passive:false});
+
+// ===============================
+// 리사이즈
+// ===============================
+window.addEventListener('resize', resizeCv);
+window.addEventListener('orientationchange', ()=>setTimeout(resizeCv,300));
+
+// ===============================
+// 초기화
+// ===============================
+document.getElementById('bestDisp').textContent=bestScore.toLocaleString();
+buildSlots();
+buildGuide();
+renderLb();
+resizeCv();
+
+gx.fillStyle='#120826'; gx.fillRect(0,0,CW0,CH0);
+nx.fillStyle='#1a0a2e'; nx.fillRect(0,0,48,48);
+</script>
+</body>
+</html>
